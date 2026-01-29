@@ -1,4 +1,7 @@
 *
 !*/
 !*.h
+!*.c
+calibration.h
+test.c
 !.gitignore
