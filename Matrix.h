@@ -142,9 +142,18 @@ void QRMethod(Matrix* A, int maxIterations) ;
     decompone una matrice in una matrice triangolare superiore e una matrice ortogonale. */
 void QRDecomposition(Matrix* A, Matrix* Q, Matrix* R);
 
+/* Funzione apply_householder_vector:
+    Applica la riflessione sul vettore dei termini noti, sostitutivo di apply_right per sistemi a 32bit.*/
+void apply_householder_vector(float* target, float* v, int n_v, int start_idx);
+
 /* Funzione: solveQR:
     risolve un sistema lineare con la fattorizzazione QR.*/
 Matrix* solveQR(Matrix* A, Matrix* b);
+
+/* Funzione solveQtbR:
+    risolve un sistema lineare con la fattorizzazione QR senza creare esplicitamente la matrice Q,
+    ma applicando le riflessioni direttamente al vettore dei termini noti.*/
+void solveQtbR(Matrix* A, float* b, float* x);
 
 /* Funzione translationMatrix:
     restituisce una matrice di traslazione omogenea in 2D/3D*/

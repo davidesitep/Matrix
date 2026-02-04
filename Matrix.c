@@ -622,7 +622,6 @@ void apply_householder_left(Matrix* A, float* v, int n_v, int start_row, int sta
     }
 }
 
-// Applica A * H (riflessione a destra per aggiornare Q o riassemblare RQ)
 void apply_householder_right(Matrix* A, float* v, int n_v, int start_row, int start_col) {
     // Scorriamo TUTTE le righe di Q (da 0 a n-1)
     for (int i = 0; i < A->rows; i++) {
@@ -639,8 +638,19 @@ void apply_householder_right(Matrix* A, float* v, int n_v, int start_row, int st
     }
 }
 
-/* Funzione QRMethod:
-    Implementazione del metodo QR per calcolare gli autovalori */
+void apply_householder_vector(float* target, float* v, int n_v, int start_idx) {
+    double dot = 0;
+    // Calcola il prodotto scalare v^T * target[start_idx...]
+    for (int i = 0; i < n_v; i++) {
+        dot += (double)v[i] * (double)target[start_idx + i];
+    }
+
+    // Applica la riflessione: b = b - 2 * (v^T * b) * v
+    for (int i = 0; i < n_v; i++) {
+        target[start_idx + i] -= (float)(2.0 * dot * (double)v[i]);
+    }
+}
+
 void QRMethod(Matrix* A, int maxIterations) {
     int n = A->rows;
     float tol = 1e-7f;
@@ -725,8 +735,6 @@ void QRMethod(Matrix* A, int maxIterations) {
     free(v);
 }
 
-/* Funzione QRDecomposition:
-    decompone una matrice in una matrice triangolare superiore e una matrice ortogonale. */
 void QRDecomposition(Matrix* A, Matrix* Q, Matrix* R) {
     int m = A->rows; int n = A->cols;
     float* v = malloc(m * sizeof(float));
@@ -787,17 +795,24 @@ Matrix* solveQR(Matrix* A, Matrix* b) {
 
     int m = A->rows;
     int n = A->cols;
-
+    printf("Matrice A:\n");
+    print_Matrix(A);
+    printf("Vettore b:\n");
+    print_Matrix(b);
     Matrix* Q = create_Matrix(m, n);
     Matrix* R = create_Matrix(m, n);
 
     QRDecomposition(A, Q, R);
-
-    Matrix* Qt_b = matrix_multiply_matrix(transpose_Matrix(Q), b);
-
+    printf("Matrice Q:\n");
+    print_Matrix(Q);
+    Matrix* Qt = transpose_Matrix(Q);
+    Matrix* Qt_b = matrix_multiply_matrix(Qt, b);
+    printf("Matrice Qt:\n");
+    print_Matrix(Qt);
     Matrix* x = create_Matrix(n, 1);
 
     for (int i = n - 1; i >= 0; i--) {
+        x->data[i][0] = 0.0f;
         for (int j = i + 1; j < n; j++) {
             x->data[i][0] -= R->data[i][j] * x->data[j][0];
         }
@@ -810,6 +825,63 @@ Matrix* solveQR(Matrix* A, Matrix* b) {
         x->data[i][0] /= R->data[i][i];
     }
     return x;
+}
+
+void solveQtbR(Matrix* A, float* b, float* x) {
+    int m = A->rows;
+    int n = A->cols;
+    float* v = malloc(m * sizeof(float));
+
+    for (int j = 0; j < n; j++) { // Iteriamo sulle colonne
+        // 1. Calcolo norma colonna (usando double per stabilità)
+        double norm_x_sq = 0;
+        for (int i = j; i < m; i++) {
+            norm_x_sq += (double)A->data[i][j] * (double)A->data[i][j];
+        }
+        float norm_x = sqrt(norm_x_sq);
+
+        if (norm_x < 1e-10f) continue;
+
+        // 2. Costruzione vettore v
+        float sign = (A->data[j][j] >= 0.0f) ? 1.0f : -1.0f;
+        v[0] = A->data[j][j] + sign * norm_x;
+
+        int v_size = m - j;
+        for (int i = 1; i < v_size; i++) {
+            v[i] = A->data[j + i][j];
+        }
+
+        // 3. Normalizzazione v (fondamentale in double)
+        double norm_v_sq = 0;
+        for (int i = 0; i < v_size; i++) {
+            norm_v_sq += (double)v[i] * (double)v[i];
+        }
+        float norm_v = sqrt(norm_v_sq);
+        for (int i = 0; i < v_size; i++) {
+            v[i] /= norm_v;
+        }
+
+        // 4. Applica a destra sulla matrice A (diventa R)
+        apply_householder_left(A, v, v_size, j, j);
+
+        // 5. Applica al vettore b (diventa Q^T * b)
+        apply_householder_vector(b, v, v_size, j);
+
+        // Azzera sotto-diagonale per pulizia
+        for (int i = j + 1; i < m; i++) A->data[i][j] = 0.0f;
+    }
+
+    // 6. Back-substitution: Risolve Rx = b_trasformato
+    // x_i = (b_i - sum(R_ij * x_j)) / R_ii
+    for (int i = n - 1; i >= 0; i--) {
+        double sum = 0;
+        for (int j = i + 1; j < n; j++) {
+            sum += (double)A->data[i][j] * (double)x[j];
+        }
+        x[i] = (float)(((double)b[i] - sum) / (double)A->data[i][i]);
+    }
+
+    free(v);
 }
 
 Matrix *traslationMatrix(int size, Matrix *tvector)
